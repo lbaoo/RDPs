@@ -79,36 +79,31 @@ jobs:
           
           Write-Host "🎯 Cấu hình hoàn tất!" -ForegroundColor Green
 
-      # TẠO USER PREMIUM - (tối ưu mật khẩu)
+      # TẠO USER PREMIUM
       - name: 👤 TẠO TÀI KHOẢN PREMIUM
         run: |
           Write-Host ""
           Write-Host "👤 ĐANG TẠO TÀI KHOẢN PREMIUM" -ForegroundColor Yellow
           
-          # Hàm tạo password ngắn (8 ký tự) đảm bảo có ít nhất 1 chữ hoa, 1 chữ thường, 1 số
           function New-PremiumPassword {
               param()
-              $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'   # loại I,O để tránh nhầm
+              $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
               $lower = 'abcdefghijkmnpqrstuvwxyz'
-              $numbers = '23456789'               # loại 0,1 để tránh nhầm
+              $numbers = '23456789'
               $all = $upper + $lower + $numbers
 
-              # đảm bảo 1 chữ hoa, 1 chữ thường, 1 chữ số
               $pw = ''
               $pw += $upper[(Get-Random -Minimum 0 -Maximum $upper.Length)]
               $pw += $lower[(Get-Random -Minimum 0 -Maximum $lower.Length)]
               $pw += $numbers[(Get-Random -Minimum 0 -Maximum $numbers.Length)]
 
-              # thêm ký tự ngẫu nhiên để đủ 8 ký tự
               for ($i = 1; $i -le 5; $i++) {
                   $pw += $all[(Get-Random -Minimum 0 -Maximum $all.Length)]
               }
 
-              # trộn ngẫu nhiên vị trí các ký tự rồi trả về
               return -join ($pw.ToCharArray() | Sort-Object { Get-Random })
           }
 
-          # Nếu người dùng đặt mật khẩu tùy chỉnh (ví dụ bằng secret) thì ưu tiên dùng
           if ($env:CUSTOM_RDP_PASS) {
               $matKhau = $env:CUSTOM_RDP_PASS
               Write-Host "│ ℹ️  Dùng mật khẩu tùy chỉnh từ env" -ForegroundColor Blue
@@ -118,7 +113,6 @@ jobs:
 
           $securePass = ConvertTo-SecureString $matKhau -AsPlainText -Force
           
-          # Xóa user cũ nếu tồn tại
           try {
               Remove-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
               Write-Host "│ ✅ Đã xóa user cũ" -ForegroundColor Green
@@ -126,24 +120,18 @@ jobs:
               Write-Host "│ ℹ️  Không có user cũ để xóa" -ForegroundColor Blue
           }
           
-          # Tạo user mới với đầy đủ quyền
           try {
               New-LocalUser -Name "AISTV-PREMIUM" -Password $securePass -AccountNeverExpires -Description "AI STV Premium Account"
               Write-Host "│ ✅ Đã tạo user mới" -ForegroundColor Green
               
-              # Đặt password không bao giờ hết hạn (dùng Set-LocalUser nếu cần)
               try {
                   Set-LocalUser -Name "AISTV-PREMIUM" -PasswordNeverExpires $true -ErrorAction SilentlyContinue
-              } catch {
-                  # Nếu môi trường không hỗ trợ Set-LocalUser, bỏ qua an toàn
-              }
+              } catch {}
 
-              # Thêm vào các nhóm cần thiết
               Add-LocalGroupMember -Group "Administrators" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
               Add-LocalGroupMember -Group "Remote Desktop Users" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
               Add-LocalGroupMember -Group "Users" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
               
-              # Kích hoạt user
               Enable-LocalUser -Name "AISTV-PREMIUM"
               
               Write-Host "│ ✅ Đã cấp quyền Administrator & RDP" -ForegroundColor Green
@@ -153,20 +141,18 @@ jobs:
               exit 1
           }
           
-          # Lưu thông tin (cẩn trọng nếu repo public)
           echo "RDP_USER=AISTV-PREMIUM" >> $env:GITHUB_ENV
           echo "RDP_PASS=$matKhau" >> $env:GITHUB_ENV
           echo "$matKhau" > $env:TEMP\rdp_password.txt
           
           Write-Host "✅ Tài khoản: AISTV-PREMIUM đã sẵn sàng" -ForegroundColor Green
 
-      # KIỂM TRA QUYỀN ĐĂNG NHẬP
+      # KIỂM TRA QUYỀN
       - name: 🔍 KIỂM TRA QUYỀN HỆ THỐNG
         run: |
           Write-Host ""
           Write-Host "🔍 KIỂM TRA QUYỀN ĐĂNG NHẬP" -ForegroundColor Yellow
           
-          # Kiểm tra user tồn tại
           $user = Get-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
           if ($user) {
               Write-Host "│ ✅ User AISTV-PREMIUM tồn tại" -ForegroundColor Green
@@ -176,7 +162,6 @@ jobs:
               exit 1
           }
           
-          # Kiểm tra quyền Administrator
           $isAdmin = (Get-LocalGroupMember -Group "Administrators" | Where-Object {$_.Name -like "*AISTV-PREMIUM"}).Count -gt 0
           if ($isAdmin) {
               Write-Host "│ ✅ Có quyền Administrator" -ForegroundColor Green
@@ -184,7 +169,6 @@ jobs:
               Write-Host "│ ❌ Không có quyền Administrator" -ForegroundColor Red
           }
           
-          # Kiểm tra quyền Remote Desktop
           $isRDPUser = (Get-LocalGroupMember -Group "Remote Desktop Users" | Where-Object {$_.Name -like "*AISTV-PREMIUM"}).Count -gt 0
           if ($isRDPUser) {
               Write-Host "│ ✅ Có quyền Remote Desktop" -ForegroundColor Green
@@ -192,7 +176,6 @@ jobs:
               Write-Host "│ ❌ Không có quyền Remote Desktop" -ForegroundColor Red
           }
           
-          # Kiểm tra dịch vụ RDP
           $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
           if ($termService.Status -eq 'Running') {
               Write-Host "│ ✅ Dịch vụ TermService đang chạy" -ForegroundColor Green
@@ -202,7 +185,7 @@ jobs:
           
           Write-Host "🎯 Kiểm tra hoàn tất!" -ForegroundColor Green
 
-      # TAILSCALE PREMIUM
+      # TAILSCALE
       - name: 🌐 THIẾT LẬP MẠNG PREMIUM
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
@@ -210,7 +193,6 @@ jobs:
           Write-Host ""
           Write-Host "🌐 ĐANG THIẾT LẬP KẾT NỐI MẠNG" -ForegroundColor Yellow
           
-          # Cài đặt Tailscale
           try {
               $msiPath = "$env:TEMP\tailscale-premium.msi"
               Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile $msiPath
@@ -221,10 +203,8 @@ jobs:
               Write-Host "│ ❌ Lỗi cài đặt Tailscale" -ForegroundColor Red
           }
           
-          # Chờ dịch vụ khởi động
           Start-Sleep -Seconds 10
           
-          # Kết nối Tailscale
           try {
               & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --hostname=ai-stv-premium-$env:GITHUB_RUN_ID --accept-routes --accept-dns --reset
               Write-Host "│ ✅ Kết nối Tailscale thành công" -ForegroundColor Green
@@ -232,7 +212,6 @@ jobs:
               Write-Host "│ ❌ Lỗi kết nối Tailscale" -ForegroundColor Red
           }
           
-          # Lấy IP với retry mechanism
           Write-Host "🔄 Đang lấy địa chỉ IP..." -NoNewline -ForegroundColor Blue
           $ip = $null
           for($i=0; $i -lt 20; $i++) {
@@ -243,9 +222,7 @@ jobs:
                       Write-Host "`r✅ Địa chỉ IP: $ip" -ForegroundColor Green
                       break
                   }
-              } catch {
-                  # Bỏ qua lỗi và thử lại
-              }
+              } catch {}
               Write-Host "`r🔄 Đang lấy địa chỉ IP... $(@('.', '..', '...')[$i % 3])" -NoNewline -ForegroundColor Blue
               Start-Sleep -Seconds 3
           }
@@ -255,7 +232,86 @@ jobs:
               echo "TAILSCALE_IP=localhost" >> $env:GITHUB_ENV
           }
 
-      # HIỂN THỊ GIAO DIỆN ĐẸP
+      # GỬI THÔNG TIN QUA TELEGRAM BOT
+      - name: 📱 GỬI THÔNG TIN QUA TELEGRAM
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          Write-Host ""
+          Write-Host "📱 ĐANG GỬI THÔNG TIN QUA TELEGRAM..." -ForegroundColor Yellow
+          
+          $matKhau = Get-Content $env:TEMP\rdp_password.txt -ErrorAction SilentlyContinue
+          if (-not $matKhau) {
+              $matKhau = "Không thể đọc"
+          }
+          
+          # Chuyển đổi thời gian
+          $durationInput = "${{ github.event.inputs.duration }}"
+          switch ($durationInput) {
+              "1h" { $displayTime = "1 giờ" }
+              "3h" { $displayTime = "3 giờ" }
+              "5h40m" { $displayTime = "5 giờ 40 phút" }
+          }
+          
+          $timeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("SE Asia Standard Time")
+          $thoiGianBatDau = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
+          
+          # Tạo message đẹp cho Telegram
+          $message = @"
+🎉 *RDP SERVER ĐÃ SẴN SÀNG!*
+
+━━━━━━━━━━━━━━━━━━━━
+📋 *THÔNG TIN KẾT NỐI*
+━━━━━━━━━━━━━━━━━━━━
+
+🌐 *IP:* ``$env:TAILSCALE_IP``
+👤 *User:* ``AISTV-PREMIUM``
+🔐 *Pass:* ``$matKhau``
+📍 *Port:* ``3389``
+
+━━━━━━━━━━━━━━━━━━━━
+⏰ *THỜI GIAN*
+━━━━━━━━━━━━━━━━━━━━
+
+⏱️ *Thời lượng:* $displayTime
+🕐 *Bắt đầu:* $($thoiGianBatDau.ToString('HH:mm:ss dd/MM/yyyy'))
+
+━━━━━━━━━━━━━━━━━━━━
+💡 *HƯỚNG DẪN KẾT NỐI*
+━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ Mở *Remote Desktop Connection*
+2️⃣ Nhập IP: ``$env:TAILSCALE_IP``
+3️⃣ Đăng nhập với thông tin trên
+4️⃣ Enjoy! 🚀
+
+━━━━━━━━━━━━━━━━━━━━
+⚡ *Powered by AI STV Premium*
+"@
+
+          # Gửi qua Telegram API
+          try {
+              $telegramUrl = "https://api.telegram.org/bot$env:TELEGRAM_BOT_TOKEN/sendMessage"
+              $body = @{
+                  chat_id = $env:TELEGRAM_CHAT_ID
+                  text = $message
+                  parse_mode = "Markdown"
+              } | ConvertTo-Json
+              
+              $response = Invoke-RestMethod -Uri $telegramUrl -Method Post -Body $body -ContentType "application/json; charset=utf-8"
+              
+              if ($response.ok) {
+                  Write-Host "│ ✅ Đã gửi thông tin qua Telegram thành công!" -ForegroundColor Green
+              } else {
+                  Write-Host "│ ❌ Telegram API trả về lỗi: $($response.description)" -ForegroundColor Red
+              }
+          } catch {
+              Write-Host "│ ❌ Lỗi gửi Telegram: $($_.Exception.Message)" -ForegroundColor Red
+              Write-Host "│ ℹ️  Kiểm tra TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID" -ForegroundColor Yellow
+          }
+
+      # HIỂN THỊ GIAO DIỆN
       - name: 🎉 THÔNG TIN KẾT NỐI
         run: |
           $matKhau = Get-Content $env:TEMP\rdp_password.txt -ErrorAction SilentlyContinue
@@ -263,7 +319,6 @@ jobs:
               $matKhau = "Không thể đọc mật khẩu"
           }
           
-          # Chuyển đổi thời gian từ input sang phút
           $durationInput = "${{ github.event.inputs.duration }}"
           switch ($durationInput) {
               "1h" { $totalMinutes = 60; $displayTime = "1 giờ" }
@@ -271,7 +326,6 @@ jobs:
               "5h40m" { $totalMinutes = 340; $displayTime = "5 giờ 40 phút" }
           }
           
-          # Tính thời gian chính xác
           $timeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("SE Asia Standard Time")
           $thoiGianBatDau = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
           $thoiGianKetThuc = $thoiGianBatDau.AddMinutes($totalMinutes)
@@ -287,6 +341,7 @@ jobs:
           Write-Host "│ 🕐  Bắt đầu: $($thoiGianBatDau.ToString('HH:mm:ss'))" -ForegroundColor White
           Write-Host "│ 🕐  Kết thúc: $($thoiGianKetThuc.ToString('HH:mm:ss'))" -ForegroundColor White
           Write-Host "│ 📍  Port: 3389" -ForegroundColor White
+          Write-Host "│ 📱  Đã gửi qua Telegram ✅" -ForegroundColor Green
           Write-Host "├───────────────────────────────────────────┤" -ForegroundColor Cyan
           Write-Host "│ 💡  Hướng dẫn:                                    │" -ForegroundColor Cyan
           Write-Host "│   1. Mở Remote Desktop Connection                 │" -ForegroundColor Yellow
@@ -295,16 +350,14 @@ jobs:
           Write-Host "│   4. Enjoy! 🚀                                    │" -ForegroundColor Yellow
           Write-Host "└───────────────────────────────────────────┘" -ForegroundColor Cyan
           
-          # Lưu thời gian vào biến môi trường
           echo "TOTAL_MINUTES=$totalMinutes" >> $env:GITHUB_ENV
 
-      # DUY TRÌ PHIÊN ỔN ĐỊNH
+      # DUY TRÌ PHIÊN
       - name: ⏳ DUY TRÌ PHIÊN LÀM VIỆC
         run: |
           $matKhau = Get-Content $env:TEMP\rdp_password.txt -ErrorAction SilentlyContinue
           $totalMinutes = $env:TOTAL_MINUTES
           
-          # Tính thời gian chính xác
           $timeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("SE Asia Standard Time")
           $thoiGianBatDau = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
           $thoiGianKetThuc = $thoiGianBatDau.AddMinutes($totalMinutes)
@@ -317,15 +370,12 @@ jobs:
           Write-Host "🕐 Kết thúc: $($thoiGianKetThuc.ToString('HH:mm:ss'))" -ForegroundColor Green
           Write-Host ""
           
-          # Tạo process giám sát hệ thống
           $monitorScript = {
               $lastLogTime = Get-Date
               while ($true) {
                   $currentTime = Get-Date
                   
-                  # Log trạng thái mỗi 2 phút
                   if (($currentTime - $lastLogTime).TotalMinutes -ge 2) {
-                      # Kiểm tra dịch vụ
                       $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
                       $rdpConnections = Get-NetTCPConnection -LocalPort 3389 -ErrorAction SilentlyContinue | Where-Object {$_.State -eq 'Established'}
                       
@@ -333,7 +383,6 @@ jobs:
                       $lastLogTime = $currentTime
                   }
                   
-                  # Kiểm tra và khởi động lại dịch vụ nếu cần
                   $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
                   if ($termService.Status -ne 'Running') {
                       Write-Host "[$($currentTime.ToString('HH:mm:ss'))] 🔄 Khởi động lại TermService..." -ForegroundColor Yellow
@@ -344,10 +393,8 @@ jobs:
               }
           }
           
-          # Chạy monitor trong background
           Start-Job -ScriptBlock $monitorScript -Name "SystemMonitor"
           
-          # Hiển thị timer chính
           $frames = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
           $colors = @('Red', 'Yellow', 'Green', 'Cyan', 'Blue', 'Magenta')
           $startTime = Get-Date
@@ -372,10 +419,9 @@ jobs:
           Write-Host ""
           Write-Host "🎯 ĐÃ HẾT THỜI GIAN - TỰ ĐỘNG DỪNG!" -ForegroundColor Red
           
-          # Dọn dẹp jobs
           Get-Job -Name "SystemMonitor" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force
 
-      # DỌN DẸP CHUYÊN NGHIỆP
+      # DỌN DẸP
       - name: 🧹 DỌN DẸP HỆ THỐNG
         if: always()
         run: |
@@ -416,7 +462,6 @@ jobs:
               Start-Sleep -Milliseconds 300
           }
           
-          # Dọn dẹp jobs còn sót
           Get-Job | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
           
           Write-Host ""
